@@ -1,12 +1,14 @@
 import click
 import os
+import csv
+import re
 from collections import defaultdict, Counter
 
 
 def dir_make(path):
     sort_dir = sorted(os.listdir(path))   
     print(', '.join(sort_dir)) 
-    start, end = map(int, click.prompt('변경 범위를 입력하세요', type=str).split(','))
+    start, end = map(int, click.prompt('변경 범위를 입력하세요(시작점,끝점)', type=str).split(','))
 
     table = defaultdict(list)
     for i in range(start, end+1):
@@ -41,6 +43,10 @@ def dir_make(path):
             for value in values:
                 names = value.split('-')
                 old_n = int(names[0])
+                if old_n + op + i < 0:
+                    print('0보다 작아질 수 없습니다.')
+                    return
+
                 new_n = '{:0>3}'.format(old_n+op+i)
                 os.rename('{}/{}'.format(path, value), '{}/{}-{}'.format(path, new_n, names[1]))
                 i += 1
@@ -55,7 +61,43 @@ def dir_make(path):
     print(sorted(os.listdir(path)))
 
 def csv_make(path):
-    pass
+    title_match = re.compile(r'^\d{3}-[\w]+$')
+    new_lines = []
+    with open(path, newline='', encoding='utf-8') as csv_file:
+        lines = csv.reader(csv_file, delimiter=',', quoting=csv.QUOTE_NONE)
+        count = 0
+        for line in lines:
+            for word in line:
+                if re.match(title_match, word):
+                    print(','.join(line))
+                    count += 1
+            new_lines.append(line)
+    if count == 0:
+        print('잘못된 파일입니다.')
+        return
+    start, end = map(int, click.prompt('변경 범위를 입력하세요(입력예시: 시작점,끝점)', type=str).split(','))
+    op = click.prompt('증가량을 입력해주세요', type=int)
+    for line in new_lines:
+        for word in line:
+            if re.match(title_match, word):
+                number, title = word.split('-')
+                old_n = int(number)
+                if start <= old_n <= end:
+                    if old_n + op < 0:
+                        print('0보다 작아질 수 없습니다.')
+                        return
+                    new_n = '{:0>3}'.format(old_n + op)
+                    line[0] = '{}-{}'.format(new_n, title)
+
+    with open(path, 'w', newline='', encoding='utf-8') as csv_file:
+        try:
+            write = csv.writer(csv_file)
+            for line in new_lines:
+                write.writerow(line)
+        except:
+            csv_file.seek(0)
+            for line in lines:
+                write.writerow(line)
 
 @click.command()
 @click.argument('path', type=click.Path(exists=True))
@@ -63,12 +105,12 @@ def main(path):
     """디렉토리 넘버링을 변경합니다."""
     path_list = path.split('/')
 
-    if '.csv' in path_list[-1]:
-        return csv_make(path)
-
     if not '.rule' in path_list[-2]:
         print('룰셋이여야합니다')
         return
+    
+    if '.csv' in path_list[-1]:
+        return csv_make(path)
     
     return dir_make(path)
     
